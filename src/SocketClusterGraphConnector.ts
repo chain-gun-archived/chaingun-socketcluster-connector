@@ -29,15 +29,63 @@ export class SocketClusterGraphConnector extends GunGraphWireConnector {
     key?: string
     cb?: Function
   }) {
+    const timeOut = setTimeout(() => {
+      console.warn("slow get", soul)
+    }, 10000)
+
     const cbWrap = (msg: any) => {
       this.ingest([msg])
+      clearTimeout(timeOut)
       if (cb) cb(msg)
     }
 
     const channel = this.subscribeToChannel(`gun/nodes/${soul}`, cbWrap)
     return () => {
       channel.unsubscribe()
+      clearTimeout(timeOut)
     }
+  }
+
+  put({
+    graph,
+    msgId = "",
+    replyTo = "",
+    cb
+  }: {
+    graph: any
+    msgId?: string
+    replyTo?: string
+    cb?: Function
+  }) {
+    if (!graph) return () => {}
+    const msg: any = {
+      put: graph
+    }
+    if (msgId) msg["#"] = msgId
+    if (replyTo) msg["@"] = replyTo
+
+    let endFn = () => {}
+
+    if (cb) {
+      const timeOut = setTimeout(() => {
+        console.warn("slow put", msgId, graph)
+      }, 10000)
+
+      const cbWrap = (msg: any) => {
+        this.ingest([msg])
+        cb(msg)
+        channel.unsubscribe()
+        clearTimeout(timeOut)
+      }
+      const channel = this.subscribeToChannel(`gun/@${msgId}`, cbWrap)
+      endFn = () => {
+        channel.unsubscribe()
+        clearTimeout(timeOut)
+      }
+    }
+
+    this.socket!.publish("gun/put", msg)
+    return endFn
   }
 
   authenticate(pub: string, priv: string) {
