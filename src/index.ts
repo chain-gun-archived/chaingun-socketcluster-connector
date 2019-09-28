@@ -1,1 +1,3 @@
-export * from './lib/number';
+import { SocketClusterGraphConnector } from "./SocketClusterGraphConnector"
+
+export default SocketClusterGraphConnector
