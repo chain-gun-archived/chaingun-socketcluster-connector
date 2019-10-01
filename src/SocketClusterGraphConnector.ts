@@ -1,4 +1,4 @@
-import { GunGraphWireConnector } from "@notabug/chaingun"
+import { GunGraphWireConnector, generateMessageId } from "@notabug/chaingun"
 import socketCluster from "socketcluster-client"
 import { SCChannel, SCChannelOptions } from "sc-channel"
 import { sign } from "@notabug/gun-sear"
@@ -10,18 +10,36 @@ export class SocketClusterGraphConnector extends GunGraphWireConnector {
   getsChannel?: SCChannel
   putsChannel?: SCChannel
 
+  private _requestChannels: {
+    [msgId: string]: SCChannel
+  }
+
   constructor(
     opts: socketCluster.SCClientSocket.ClientOptions | undefined,
     name = "SocketClusterGraphConnector"
   ) {
     super(name)
+    this._requestChannels = {}
     this.outputQueue.completed.on(this._onOutputProcessed.bind(this))
     this.opts = opts
     this._connectToCluster()
   }
 
+  off(msgId: string) {
+    super.off(msgId)
+    const channel = this._requestChannels[msgId]
+
+    if (channel) {
+      channel.unsubscribe()
+      delete this._requestChannels[msgId]
+    }
+
+    return this
+  }
+
   get({
     soul,
+    msgId,
     cb
   }: {
     soul: string
@@ -29,20 +47,17 @@ export class SocketClusterGraphConnector extends GunGraphWireConnector {
     key?: string
     cb?: Function
   }) {
-    const timeOut = setTimeout(() => {
-      console.warn("slow get", soul)
-    }, 10000)
-
     const cbWrap = (msg: any) => {
       this.ingest([msg])
-      clearTimeout(timeOut)
       if (cb) cb(msg)
     }
 
     const channel = this.subscribeToChannel(`gun/nodes/${soul}`, cbWrap)
+    if (msgId) this._requestChannels[msgId] = channel
+
     return () => {
+      if (msgId) this.off(msgId)
       channel.unsubscribe()
-      clearTimeout(timeOut)
     }
   }
 
@@ -58,34 +73,26 @@ export class SocketClusterGraphConnector extends GunGraphWireConnector {
     cb?: Function
   }) {
     if (!graph) return () => {}
+    const id = msgId || generateMessageId()
     const msg: any = {
+      "#": id,
       put: graph
     }
-    if (msgId) msg["#"] = msgId
+
     if (replyTo) msg["@"] = replyTo
 
-    let endFn = () => {}
-
     if (cb) {
-      const timeOut = setTimeout(() => {
-        console.warn("slow put", msgId, graph)
-      }, 10000)
-
       const cbWrap = (msg: any) => {
         this.ingest([msg])
         cb(msg)
         channel.unsubscribe()
-        clearTimeout(timeOut)
       }
-      const channel = this.subscribeToChannel(`gun/@${msgId}`, cbWrap)
-      endFn = () => {
-        channel.unsubscribe()
-        clearTimeout(timeOut)
-      }
+      const channel = this.subscribeToChannel(`gun/@${id}`, cbWrap)
+      this._requestChannels[id] = channel
     }
 
     this.socket!.publish("gun/put", msg)
-    return endFn
+    return () => this.off(id)
   }
 
   authenticate(pub: string, priv: string) {
