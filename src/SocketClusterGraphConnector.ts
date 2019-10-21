@@ -1,171 +1,198 @@
-import { GunGraphWireConnector, generateMessageId } from "@notabug/chaingun"
-import socketCluster from "socketcluster-client"
-import { SCChannel, SCChannelOptions } from "sc-channel"
-import { sign } from "@notabug/gun-sear"
+import { generateMessageId, GunGraphWireConnector } from '@chaingun/client';
+import { sign } from '@chaingun/sear';
+import { SCChannel, SCChannelOptions } from 'sc-channel';
+import socketCluster from 'socketcluster-client';
+import { GunMsgCb } from '../../types/build/main';
 
 export class SocketClusterGraphConnector extends GunGraphWireConnector {
-  opts: socketCluster.SCClientSocket.ClientOptions | undefined
-  socket?: socketCluster.SCClientSocket
-  msgChannel?: SCChannel
-  getsChannel?: SCChannel
-  putsChannel?: SCChannel
+  public readonly opts: socketCluster.SCClientSocket.ClientOptions | undefined;
+  public readonly socket?: socketCluster.SCClientSocket;
+  public readonly msgChannel?: SCChannel;
+  public readonly getsChannel?: SCChannel;
+  public readonly putsChannel?: SCChannel;
 
-  private _requestChannels: {
-    [msgId: string]: SCChannel
-  }
+  private readonly _requestChannels: {
+    // tslint:disable-next-line: readonly-keyword
+    [msgId: string]: SCChannel;
+  };
 
   constructor(
     opts: socketCluster.SCClientSocket.ClientOptions | undefined,
-    name = "SocketClusterGraphConnector"
+    name = 'SocketClusterGraphConnector'
   ) {
-    super(name)
-    this._requestChannels = {}
-    this.outputQueue.completed.on(this._onOutputProcessed.bind(this))
-    this.opts = opts
-    this._connectToCluster()
+    super(name);
+    this._requestChannels = {};
+    this.outputQueue.completed.on(this._onOutputProcessed.bind(this));
+    this.opts = opts;
+    this._connectToCluster();
   }
 
-  off(msgId: string) {
-    super.off(msgId)
-    const channel = this._requestChannels[msgId]
+  public off(msgId: string): SocketClusterGraphConnector {
+    super.off(msgId);
+    const channel = this._requestChannels[msgId];
 
     if (channel) {
-      channel.unsubscribe()
-      delete this._requestChannels[msgId]
+      channel.unsubscribe();
+      // tslint:disable-next-line: no-object-mutation no-delete
+      delete this._requestChannels[msgId];
     }
 
-    return this
+    return this;
   }
 
-  get({
+  public get({
     soul,
     msgId,
     cb
   }: {
-    soul: string
-    msgId?: string
-    key?: string
-    cb?: Function
-  }) {
+    readonly soul: string;
+    readonly msgId?: string;
+    readonly key?: string;
+    readonly cb?: GunMsgCb;
+  }): () => void {
     const cbWrap = (msg: any) => {
-      this.ingest([msg])
-      if (cb) cb(msg)
-    }
+      this.ingest([msg]);
+      if (cb) {
+        cb(msg);
+      }
+    };
 
-    const channel = this.subscribeToChannel(`gun/nodes/${soul}`, cbWrap)
-    if (msgId) this._requestChannels[msgId] = channel
+    const channel = this.subscribeToChannel(`gun/nodes/${soul}`, cbWrap);
+    if (msgId) {
+      // tslint:disable-next-line: no-object-mutation
+      this._requestChannels[msgId] = channel;
+    }
 
     return () => {
-      if (msgId) this.off(msgId)
-      channel.unsubscribe()
-    }
+      if (msgId) {
+        this.off(msgId);
+      }
+      channel.unsubscribe();
+    };
   }
 
-  put({
+  public put({
     graph,
-    msgId = "",
-    replyTo = "",
+    msgId = '',
+    replyTo = '',
     cb
   }: {
-    graph: any
-    msgId?: string
-    replyTo?: string
-    cb?: Function
-  }) {
-    if (!graph) return () => {}
-    const id = msgId || generateMessageId()
-    const msg: any = {
-      "#": id,
-      put: graph
+    readonly graph: any;
+    readonly msgId?: string;
+    readonly replyTo?: string;
+    readonly cb?: GunMsgCb;
+  }): () => void {
+    if (!graph) {
+      // tslint:disable-next-line: no-empty
+      return () => {};
     }
 
-    if (replyTo) msg["@"] = replyTo
+    const id = msgId || generateMessageId();
+    const msg: any = {
+      '#': id,
+      put: graph
+    };
+
+    if (replyTo) {
+      // tslint:disable-next-line: no-object-mutation
+      msg['@'] = replyTo;
+    }
 
     if (cb) {
-      const cbWrap = (msg: any) => {
-        this.ingest([msg])
-        cb(msg)
-        channel.unsubscribe()
-      }
-      const channel = this.subscribeToChannel(`gun/@${id}`, cbWrap)
-      this._requestChannels[id] = channel
+      const cbWrap = (response: any) => {
+        this.ingest([response]);
+        cb(response);
+        channel.unsubscribe();
+      };
+      const channel = this.subscribeToChannel(`gun/@${id}`, cbWrap);
+      // tslint:disable-next-line: no-object-mutation
+      this._requestChannels[id] = channel;
     }
 
-    this.socket!.publish("gun/put", msg)
-    return () => this.off(id)
+    this.socket!.publish('gun/put', msg);
+    return () => this.off(id);
   }
 
-  authenticate(pub: string, priv: string) {
+  public authenticate(pub: string, priv: string): Promise<void> {
     const doAuth = () => {
-      const id = this.socket!.id
-      const timestamp = new Date().getTime()
-      const challenge = `${id}/${timestamp}`
+      const id = this.socket!.id;
+      const timestamp = new Date().getTime();
+      const challenge = `${id}/${timestamp}`;
       return sign(challenge, { pub, priv }, { raw: true }).then(
         proof =>
           new Promise((ok, fail) => {
             this.socket!.emit(
-              "login",
+              'login',
               {
-                pub,
-                proof
+                proof,
+                pub
               },
               (err: any, rejection: any) => {
                 if (err || rejection) {
-                  fail(err || rejection)
+                  fail(err || rejection);
                 } else {
-                  ok()
+                  ok();
                 }
               }
-            )
+            );
           })
-      )
-    }
+      );
+    };
 
     return this.waitForConnection().then(() => {
-      doAuth()
-      this.socket!.on("connect", doAuth)
-    })
+      doAuth();
+      this.socket!.on('connect', doAuth);
+    });
   }
 
-  subscribeToChannel(
+  public subscribeToChannel(
     channelName: string,
-    cb?: Function,
+    cb?: GunMsgCb,
     opts?: SCChannelOptions
-  ) {
-    const channel = this.socket!.subscribe(channelName, opts)
-    channel.on("subscribe", () => {
+  ): SCChannel {
+    const channel = this.socket!.subscribe(channelName, opts);
+    channel.on('subscribe', () => {
       channel.watch(msg => {
-        this.ingest([msg])
-        if (cb) cb(msg)
-      })
-    })
-    return channel
+        this.ingest([msg]);
+        if (cb) {
+          cb(msg);
+        }
+      });
+    });
+    return channel;
   }
 
-  publishToChannel(channel: string, msg: any) {
-    this.socket!.publish(channel, msg)
+  public publishToChannel(
+    channel: string,
+    msg: any
+  ): SocketClusterGraphConnector {
+    this.socket!.publish(channel, msg);
+    return this;
   }
 
-  protected _connectToCluster() {
-    this.socket = socketCluster.create(this.opts)
-    this.socket.on("connect", () => {
-      this.events.connection.trigger(true)
-    })
-    this.socket.on("error", err => {
-      console.error("SC Connection Error", err.stack, err)
-    })
+  protected _connectToCluster(): void {
+    // @ts-ignore
+    // tslint:disable-next-line: no-object-mutation
+    this.socket = socketCluster.create(this.opts);
+    this.socket.on('connect', () => {
+      this.events.connection.trigger(true);
+    });
+    this.socket.on('error', err => {
+      // tslint:disable-next-line: no-console
+      console.error('SC Connection Error', err.stack, err);
+    });
   }
 
-  private _onOutputProcessed(msg: any) {
+  private _onOutputProcessed(msg: any): void {
     if (msg && this.socket) {
-      const replyTo = msg["@"]
+      const replyTo = msg['@'];
       if (replyTo) {
-        this.publishToChannel(`gun/@${replyTo}`, msg)
+        this.publishToChannel(`gun/@${replyTo}`, msg);
       } else {
-        if ("get" in msg) {
-          this.publishToChannel("gun/get", msg)
-        } else if ("put" in msg) {
-          this.publishToChannel("gun/put", msg)
+        if ('get' in msg) {
+          this.publishToChannel('gun/get', msg);
+        } else if ('put' in msg) {
+          this.publishToChannel('gun/put', msg);
         }
       }
     }
