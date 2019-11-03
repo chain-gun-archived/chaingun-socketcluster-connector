@@ -107,9 +107,14 @@ export class SocketClusterGraphConnector extends GunGraphWireConnector {
       const channel = this.subscribeToChannel(`gun/@${id}`, cbWrap);
       // tslint:disable-next-line: no-object-mutation
       this._requestChannels[id] = channel;
+
+      channel.on('subscribe', () => {
+        this.socket!.publish('gun/put', msg);
+      });
+    } else {
+      this.socket!.publish('gun/put', msg);
     }
 
-    this.socket!.publish('gun/put', msg);
     return () => this.off(id);
   }
 
@@ -151,13 +156,11 @@ export class SocketClusterGraphConnector extends GunGraphWireConnector {
     opts?: SCChannelOptions
   ): SCChannel {
     const channel = this.socket!.subscribe(channelName, opts);
-    channel.on('subscribe', () => {
-      channel.watch(msg => {
-        this.ingest([msg]);
-        if (cb) {
-          cb(msg);
-        }
-      });
+    channel.watch(msg => {
+      this.ingest([msg]);
+      if (cb) {
+        cb(msg);
+      }
     });
     return channel;
   }

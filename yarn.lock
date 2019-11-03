@@ -307,10 +307,10 @@
   dependencies:
     "@chaingun/types" "^0.0.1"
 
-"@chaingun/sear@^0.0.23":
-  version "0.0.23"
-  resolved "https://registry.yarnpkg.com/@chaingun/sear/-/sear-0.0.23.tgz#a0b7bb8557ba0c6ecb7b650a09e4a741b22582f5"
-  integrity sha512-TdSfK6ESDRhNNGt1Iez9tN/yvmUZVseltcu7B8+Lk1Pkt/4UwDAAEC4dKHowNQK3fHNRvsq28PQ8++8jFYicSA==
+"@chaingun/sear@^0.0.24":
+  version "0.0.24"
+  resolved "https://registry.yarnpkg.com/@chaingun/sear/-/sear-0.0.24.tgz#a9a1d09cf5990468fd216b0ae2b8f5e1242657b0"
+  integrity sha512-SV+kb9VkX7wxvmiOusU6bJcxx8lWb+OdHDOTuib3ILD+Mwm/Ks5sospSxLodu5uiXZszDCdMDgqCoGPkfxHObQ==
   dependencies:
     "@types/window-or-global" "^1.0.0"
     isomorphic-webcrypto "^2.3.2"
