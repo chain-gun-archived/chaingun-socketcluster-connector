@@ -102,8 +102,9 @@ export class SocketClusterGraphConnector extends GunGraphWireConnector {
       const cbWrap = (response: any) => {
         this.ingest([response]);
         cb(response);
-        channel.unsubscribe();
+        this.off(id);
       };
+
       const channel = this.subscribeToChannel(`gun/@${id}`, cbWrap);
       // tslint:disable-next-line: no-object-mutation
       this._requestChannels[id] = channel;
