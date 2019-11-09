@@ -1,8 +1,8 @@
 import { generateMessageId, GunGraphWireConnector } from '@chaingun/client';
 import { sign } from '@chaingun/sear';
+import { GunMsgCb } from '@chaingun/types';
 import { SCChannel, SCChannelOptions } from 'sc-channel';
 import socketCluster from 'socketcluster-client';
-import { GunMsgCb } from '../../types/build/main';
 
 export class SocketClusterGraphConnector extends GunGraphWireConnector {
   public readonly opts: socketCluster.SCClientSocket.ClientOptions | undefined;
@@ -108,13 +108,9 @@ export class SocketClusterGraphConnector extends GunGraphWireConnector {
       const channel = this.subscribeToChannel(`gun/@${id}`, cbWrap);
       // tslint:disable-next-line: no-object-mutation
       this._requestChannels[id] = channel;
-
-      channel.on('subscribe', () => {
-        this.socket!.publish('gun/put', msg);
-      });
-    } else {
-      this.socket!.publish('gun/put', msg);
     }
+
+    this.socket!.publish('gun/put', msg);
 
     return () => this.off(id);
   }
@@ -125,7 +121,7 @@ export class SocketClusterGraphConnector extends GunGraphWireConnector {
       const timestamp = new Date().getTime();
       const challenge = `${id}/${timestamp}`;
       return sign(challenge, { pub, priv }, { raw: true }).then(
-        proof =>
+        (proof: any) =>
           new Promise((ok, fail) => {
             this.socket!.emit(
               'login',
